@@ -1,0 +1,78 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+    name: potato-local
+    labels:
+        name: potato-local
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: potato-deployment
+    namespace: potato-local
+    labels:
+        app: potato
+spec:
+    replicas: 2
+    selector:
+        matchLabels:
+            app: potato
+    template:
+        metadata:
+            labels:
+                app: potato
+        spec:
+            automountServiceAccountToken: false
+            containers:
+                -   name: potato
+                    image: localhost:5000/potato
+                    resources:
+                        requests:
+                            memory: 64Mi
+                            cpu: 250m
+                        limits:
+                            memory: 128Mi
+                            cpu: 500m
+                    ports:
+                        -   containerPort: 3000
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: potato-service
+    namespace: potato-local
+spec:
+    type: LoadBalancer
+    selector:
+        app: potato
+    ports:
+        -   protocol: TCP
+            port: 3000
+            targetPort: 3000
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+    name: another-namespace
+    labels:
+        name: another-namespace
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+    name: scheduler
+    namespace: another-namespace
+spec:
+    schedule: '*/1 * * * *'
+    jobTemplate:
+        spec:
+            template:
+                spec:
+                    restartPolicy: OnFailure
+                    containers:
+                    -   name: scheduler
+                        image: docker.io/alpine/curl:latest
+                        args:
+                            -   /bin/sh
+                            -   -c
+                            -   'curl -s http://potato-service.potato-local:3000'
